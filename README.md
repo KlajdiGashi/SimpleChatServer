@@ -17,7 +17,7 @@ through Message Passing.
  3. Multiple clients can connect to server and afterwards they can exchange messages with each other.
 
 ### Technologies 
-The implementation of the program was made using [C](https://en.wikipedia.org/wiki/C_(programming_language)) Programming Language. 
+The implementation of the program was made using [C](https://en.wikipedia.org/wiki/C_(programming_language)) Programming Language and is executed on Ubuntu in a virtual machine.
 
 ### Contributors
 
