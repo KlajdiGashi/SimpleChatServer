@@ -172,3 +172,186 @@ void send_client_by_name(char *name, char *buff) {
 		}
 	}
 }
+
+/* Handle all communication with the client */
+void *handle_client(void *arg){
+	char buff_out[BUFFER_SZ];
+	char temp[BUFFER_SZ];
+	char name[32];
+	int leave_flag = 0;
+
+	cli_count++;
+	client_t *cli = (client_t *)arg;
+
+	// Name
+	if(recv(cli->sockfd, name, 32, 0) <= 0 || strlen(name) <  2 || strlen(name) >= 32-1){
+		printf("Didn't enter the name.\n");
+		leave_flag = 1;
+	} else{
+		strcpy(cli->name, name);
+		sprintf(buff_out, "%s has joined\n", cli->name);
+		printf("%s", buff_out);
+		send_message(buff_out, cli->uid);
+	}
+
+	bzero(buff_out, BUFFER_SZ);
+	bzero(temp, BUFFER_SZ);
+
+	while(1){
+		if (leave_flag) {
+			break;
+		}
+
+		int receive = recv(cli->sockfd, buff_out, BUFFER_SZ, 0);
+		buff_out[receive] = '\0';
+		if (receive > 0){ // a message has been sent
+			if(strlen(buff_out) > 0){ //message is longer than 0 characters
+				strcpy(temp, buff_out);
+				char *token = strtok(temp, " ");
+        			token = strtok(NULL, " ");
+				str_trim_lf(token, strlen(token)); // clear out the \n
+				//printf("-----%s------", token);
+				if (token[0] == '/') { // is a command
+				    if (!strcmp(token, "/quit")) {
+				    	leave_flag = 1;
+					break;
+				    } else if (!strcmp(token, "/ping")) {
+					send_message_c("<< pong\r\n", cli->uid);
+				    } else if (!strcmp(token, "/msg")) {
+					token = strtok(NULL, " ");
+					if (token) {
+					    //int uid = atoi(token); CANT BE USED AS ITS NAMES
+					    char rName[32];
+					    strcpy(rName, token);
+					    token = strtok(NULL, " ");
+					    if (token) {
+						sprintf(buff_out, "[PM][%s]", cli->name);
+						while (token) {
+						    strcat(buff_out, " ");
+						    strcat(buff_out, token);
+						    token = strtok(NULL, " ");
+						}
+						strcat(buff_out, "\r\n");
+						send_client_by_name(rName, buff_out);
+						//send_message_c(buff_out, uid);
+					    } else {
+						send_message_c("<< message cannot be null\r\n", cli->uid);
+					    }
+					} else {
+					    send_message_c("<< reference cannot be null\r\n", cli->uid);
+					}
+				    } else if(!strcmp(token, "/list")) {
+					sprintf(buff_out, "<< clients %d\r\n", cli_count);
+					send_message_c(buff_out, cli->uid);
+					send_active_clients(cli->uid);
+				    } else if (!strcmp(token, "/help")) {
+					strcat(buff_out, "<< /quit     Quit chatroom\r\n");
+					strcat(buff_out, "<< /msg      <reference> <message> Send private message\r\n");
+					strcat(buff_out, "<< /list     Show active clients\r\n");
+					strcat(buff_out, "<< /help     Show help\r\n");
+					send_message_c(buff_out, cli->uid);
+				    } else {
+					send_message_c("<< unknown command\r\n", cli->uid);
+				    }
+				} else {
+					send_message(buff_out, cli->uid);
+
+					str_trim_lf(buff_out, strlen(buff_out));
+					printf("%s -> %s\n", buff_out, cli->name);
+				}		
+				
+			}
+		} else if (receive == 0 || strcmp(buff_out, "exit") == 0){
+			sprintf(buff_out, "%s has left\n", cli->name);
+			printf("%s", buff_out);
+			send_message(buff_out, cli->uid);
+			leave_flag = 1;
+		} else {
+			printf("ERROR: -1\n");
+			leave_flag = 1;
+		}
+
+		bzero(buff_out, BUFFER_SZ);
+	}
+
+  /* Delete client from queue and yield thread */
+	close(cli->sockfd);
+  queue_remove(cli->uid);
+  free(cli);
+  cli_count--;
+  pthread_detach(pthread_self());
+
+	return NULL;
+}
+
+int main(int argc, char **argv){
+	if(argc != 2){
+		printf("Usage: %s <port>\n", argv[0]);
+		return EXIT_FAILURE;
+	}
+
+	char *ip = "127.0.0.1";
+	int port = atoi(argv[1]);
+	int option = 1;
+	int listenfd = 0, connfd = 0;
+  struct sockaddr_in serv_addr;
+  struct sockaddr_in cli_addr;
+  pthread_t tid;
+
+  /* Socket settings */
+  listenfd = socket(AF_INET, SOCK_STREAM, 0);
+  serv_addr.sin_family = AF_INET;
+  serv_addr.sin_addr.s_addr = inet_addr(ip);
+  serv_addr.sin_port = htons(port);
+
+  /* Ignore pipe signals */
+	signal(SIGPIPE, SIG_IGN);
+
+	if(setsockopt(listenfd, SOL_SOCKET,(SO_REUSEPORT | SO_REUSEADDR),(char*)&option,sizeof(option)) < 0){
+		perror("ERROR: setsockopt failed");
+    return EXIT_FAILURE;
+	}
+
+	/* Bind */
+  if(bind(listenfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+    perror("ERROR: Socket binding failed");
+    return EXIT_FAILURE;
+  }
+
+  /* Listen */
+  if (listen(listenfd, 10) < 0) {
+    perror("ERROR: Socket listening failed");
+    return EXIT_FAILURE;
+	}
+
+	printf("-------WELCOME-------\n");
+
+	while(1){
+		socklen_t clilen = sizeof(cli_addr);
+		connfd = accept(listenfd, (struct sockaddr*)&cli_addr, &clilen);
+
+		/* Check if max clients is reached */
+		if((cli_count + 1) == MAX_CLIENTS){
+			printf("Max clients reached. Rejected: ");
+			print_client_addr(cli_addr);
+			printf(":%d\n", cli_addr.sin_port);
+			close(connfd);
+			continue;
+		}
+
+		/* Client settings */
+		client_t *cli = (client_t *)malloc(sizeof(client_t));
+		cli->address = cli_addr;
+		cli->sockfd = connfd;
+		cli->uid = uid++;
+
+		/* Add client to the queue and fork thread */
+		queue_add(cli);
+		pthread_create(&tid, NULL, &handle_client, (void*)cli);
+
+		/* Reduce CPU usage */
+		sleep(1);
+	}
+
+	return EXIT_SUCCESS;
+}
