@@ -1,9 +1,9 @@
 # Operating Systems Project 02 - Grupi ... 
 
 ### General Info 
-A [university](https://fiek.uni-pr.edu) team project.  
+A [university](https://fiek.uni-pr.edu) team project organized by Operating Systems Subject, the team consists of 3 students.  
 
-## What's the project about?
+### What's the project about?
 In this project we will implement a simple Chat Server, where the client and server will communicate with each other 
 through Message Passing.
 1. First the client connects to the server using server's port  *./client '<port>'*
@@ -17,7 +17,7 @@ through Message Passing.
  3. Multiple clients can connect to server and afterwards they can exchange messages with each other.
 
 ### Technologies 
-The implementation of the program was made using [C](https://en.wikipedia.org/wiki/C_(programming_language)) Programming Language. 
+The implementation of the program was made using [C](https://en.wikipedia.org/wiki/C_(programming_language)) Programming Language and is executed on Ubuntu in a virtual machine.
 
 ### Contributors
 
