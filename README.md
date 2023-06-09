@@ -22,8 +22,5 @@ The implementation of the program was made using [C](https://en.wikipedia.org/wi
 ### Contributors
 
 - [Gjon Hajdari](https://github.com/)
-
 - [Klajdi Gashi](https://github.com/KlajdiGashi)
-
 - [Kleda Gashi](https://github.com/kledagashi)
-
